@@ -69,6 +69,7 @@ BOOL CRemoteClientApp::InitInstance()
 	// TODO: 应适当修改该字符串，
 	// 例如修改为公司或组织名
 	SetRegistryKey(_T("应用程序向导生成的本地应用程序"));
+
 	CClientController::getInstance()->InitController();
 	INT_PTR nResponse = CClientController::getInstance()->Invoke(m_pMainWnd);
 	//CRemoteClientDlg dlg;

@@ -1,4 +1,4 @@
-#include "pch.h"
+ï»¿#include "pch.h"
 #include "ClientSocket.h"
 
 CClientSocket* CClientSocket::m_instance = NULL;
@@ -52,13 +52,13 @@ CClientSocket::CClientSocket() :
 	m_hThread(INVALID_HANDLE_VALUE)
 {
 	if (InitSockEnv() == FALSE) {
-		MessageBox(NULL, _T("ÎŞ·¨³õÊ¼»¯Ì×½Ó×Ö»·¾³,Çë¼ì²éÍøÂçÉèÖÃ£¡"), _T("³õÊ¼»¯´íÎó£¡"), MB_OK | MB_ICONERROR);
+		MessageBox(NULL, _T("æ— æ³•åˆå§‹åŒ–å¥—æ¥å­—ç¯å¢ƒ,è¯·æ£€æŸ¥ç½‘ç»œè®¾ç½®ï¼"), _T("åˆå§‹åŒ–é”™è¯¯ï¼"), MB_OK | MB_ICONERROR);
 		exit(0);
 	}
 	m_eventInvoke = CreateEvent(NULL, TRUE, FALSE, NULL);
 	m_hThread = (HANDLE)_beginthreadex(NULL, 0, &CClientSocket::threadEntry, this, 0, &m_nThreadID);
 	if (WaitForSingleObject(m_eventInvoke, 100) == WAIT_TIMEOUT) {
-		TRACE("ÍøÂçÏûÏ¢´¦ÀíÏß³ÌÆô¶¯Ê§°ÜÁË£¡\r\n");
+		TRACE("ç½‘ç»œæ¶ˆæ¯å¤„ç†çº¿ç¨‹å¯åŠ¨å¤±è´¥äº†ï¼\r\n");
 	}
 	CloseHandle(m_eventInvoke);
 	m_buffer.resize(BUFFER_SIZE);
@@ -72,16 +72,28 @@ CClientSocket::CClientSocket() :
 	};
 	for (int i = 0; funcs[i].message != 0; i++) {
 		if (m_mapFunc.insert(std::pair<UINT, MSGFUNC>(funcs[i].message, funcs[i].func)).second == false) {
-			TRACE("²åÈëÊ§°Ü£¬ÏûÏ¢Öµ£º%d º¯ÊıÖµ:%08X ĞòºÅ:%d\r\n", funcs[i].message, funcs[i].func, i);
+			TRACE("æ’å…¥å¤±è´¥ï¼Œæ¶ˆæ¯å€¼ï¼š%d å‡½æ•°å€¼:%08X åºå·:%d\r\n", funcs[i].message, funcs[i].func, i);
 		}
 	}
 }
 
 bool CClientSocket::InitSocket()
 {
-	if (m_sock != INVALID_SOCKET)CloseSocket();
+	if (m_sock != INVALID_SOCKET) CloseSocket();
+
 	m_sock = socket(PF_INET, SOCK_STREAM, 0);
-	if (m_sock == -1)return false;
+	if (m_sock == -1) return false;
+	
+	// âœ… æ·»åŠ ç«¯å£å¤ç”¨é€‰é¡¹
+	int opt = 1;
+	setsockopt(m_sock, SOL_SOCKET, SO_REUSEADDR, 
+              (const char*)&opt, sizeof(opt));
+	
+	// âœ… ç¦ç”¨ Nagle ç®—æ³•ï¼ˆå¯é€‰ï¼Œæé«˜å°æ•°æ®åŒ…ä¼ è¾“æ•ˆç‡ï¼‰
+	int nodelay = 1;
+	setsockopt(m_sock, IPPROTO_TCP, TCP_NODELAY, 
+              (const char*)&nodelay, sizeof(nodelay));
+	
 	sockaddr_in serv_adr;
 	memset(&serv_adr, 0, sizeof(serv_adr));
 	serv_adr.sin_family = AF_INET;
@@ -89,16 +101,21 @@ bool CClientSocket::InitSocket()
 	serv_adr.sin_addr.s_addr = htonl(m_nIP);
 	serv_adr.sin_port = htons(m_nPort);
 	if (serv_adr.sin_addr.s_addr == INADDR_NONE) {
-		AfxMessageBox("Ö¸¶¨µÄIPµØÖ·£¬²»´æÔÚ£¡");
+		AfxMessageBox("æŒ‡å®šçš„IPåœ°å€ï¼Œä¸å­˜åœ¨ï¼");
 		return false;
 	}
+	
 	int ret = connect(m_sock, (sockaddr*)&serv_adr, sizeof(serv_adr));
 	if (ret == -1) {
-		AfxMessageBox("Á¬½ÓÊ§°Ü!");
-		TRACE("Á¬½ÓÊ§°Ü£º%d %s\r\n", WSAGetLastError(), GetErrInfo(WSAGetLastError()).c_str());
+		int error = WSAGetLastError();
+		CString msg;
+		msg.Format(_T("è¿æ¥å¤±è´¥ï¼é”™è¯¯ç ï¼š%d"), error);
+		AfxMessageBox(msg);
+		TRACE("è¿æ¥å¤±è´¥ï¼š%d %s\r\n", error, GetErrInfo(error).c_str());
 		return false;
 	}
-	TRACE("socket init done!\r\n");
+	
+	TRACE("socket init done! sock=%d\r\n", m_sock);
 	return true;
 }
 
@@ -165,7 +182,7 @@ void CClientSocket::threadFunc()
 			CPacket& head = m_lstSend.front();
 			m_lock.unlock();
 			if (Send(head) == false) {
-				TRACE("·¢ËÍÊ§°Ü£¡\r\n");
+				TRACE("å‘é€å¤±è´¥ï¼\r\n");
 				continue;
 			}
 			std::map<HANDLE, std::list<CPacket>&>::iterator it;
@@ -179,7 +196,7 @@ void CClientSocket::threadFunc()
 						index += length;
 						size_t size = (size_t)index;
 						CPacket pack((BYTE*)pBuffer, size);
-						if (size > 0) {//TODO:¶ÔÓÚÎÄ¼ş¼ĞĞÅÏ¢»ñÈ¡£¬ÎÄ¼şĞÅÏ¢»ñÈ¡¿ÉÄÜ²úÉúÎÊÌâ
+						if (size > 0) {//TODO:å¯¹äºæ–‡ä»¶å¤¹ä¿¡æ¯è·å–ï¼Œæ–‡ä»¶ä¿¡æ¯è·å–å¯èƒ½äº§ç”Ÿé—®é¢˜
 							pack.hEvent = head.hEvent;
 							it->second.push_back(pack);
 							memmove(pBuffer, pBuffer + size, index - size);
@@ -193,12 +210,12 @@ void CClientSocket::threadFunc()
 					}
 					else if (length <= 0 && index <= 0) {
 						CloseSocket();
-						SetEvent(head.hEvent);//µÈµ½·şÎñÆ÷¹Ø±ÕÃüÁîÖ®ºó£¬ÔÙÍ¨ÖªÊÂÇéÍê³É
+						SetEvent(head.hEvent);//ç­‰åˆ°æœåŠ¡å™¨å…³é—­å‘½ä»¤ä¹‹åï¼Œå†é€šçŸ¥äº‹æƒ…å®Œæˆ
 						if (it0 != m_mapAutoClosed.end()) {
 							TRACE("SetEvent %d %d\r\n", head.sCmd, it0->second);
 						}
 						else {
-							TRACE("Òì³£µÄÇé¿ö£¬Ã»ÓĞ¶ÔÓ¦µÄpair\r\n");
+							TRACE("å¼‚å¸¸çš„æƒ…å†µï¼Œæ²¡æœ‰å¯¹åº”çš„pair\r\n");
 						}
 						break;
 					}
@@ -219,16 +236,24 @@ void CClientSocket::threadFunc()
 
 void CClientSocket::threadFunc2()
 {
-	SetEvent(m_eventInvoke);
-	MSG msg;
-	while (::GetMessage(&msg, NULL, 0, 0)) {
-		TranslateMessage(&msg);
-		DispatchMessage(&msg);
-		TRACE("Get Message :%08X \r\n", msg.message);
-		if (m_mapFunc.find(msg.message) != m_mapFunc.end()) {
-			(this->*m_mapFunc[msg.message])(msg.message, msg.wParam, msg.lParam);
-		}
-	}
+    TRACE("Entry threadFunc2() thread_id=%d\r\n", GetCurrentThreadId());
+    SetEvent(m_eventInvoke);
+    MSG msg;
+    
+    while (::GetMessage(&msg, NULL, 0, 0)) {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+        TRACE("Get Message :%08X \r\n", msg.message);
+        
+        if (m_mapFunc.find(msg.message) != m_mapFunc.end()) {
+            TRACE("Processing message %08X\r\n", msg.message);
+            (this->*m_mapFunc[msg.message])(msg.message, msg.wParam, msg.lParam);
+            TRACE("Message %08X processed\r\n", msg.message);
+        }
+    }
+    
+    // âœ… æ·»åŠ é€€å‡ºæ—¥å¿—
+    TRACE("threadFunc2 exit! GetLastError=%d\r\n", GetLastError());
 }
 
 bool CClientSocket::Send(const CPacket& pack)
@@ -241,51 +266,116 @@ bool CClientSocket::Send(const CPacket& pack)
 }
 
 void CClientSocket::SendPack(UINT nMsg, WPARAM wParam, LPARAM lParam)
-{//TODO:¶¨ÒåÒ»¸öÏûÏ¢µÄÊı¾İ½á¹¹(Êı¾İºÍÊı¾İ³¤¶È£¬Ä£Ê½) »Øµ÷ÏûÏ¢µÄµÄÊı¾İ½á¹¹(HWND))
-	PACKET_DATA data = *(PACKET_DATA*)wParam;
-	delete (PACKET_DATA*)wParam;
-	HWND hWnd = (HWND)lParam;
-	size_t nTemp = data.strData.size();
-	CPacket current((BYTE*)data.strData.c_str(), nTemp);
-	if (InitSocket() == true) {
-		int ret = send(m_sock, (char*)data.strData.c_str(), (int)data.strData.size(), 0);
-		if (ret > 0) {
-			size_t index = 0;
-			std::string strBuffer;
-			strBuffer.resize(BUFFER_SIZE);
-			char* pBuffer = (char*)strBuffer.c_str();
-			while (m_sock != INVALID_SOCKET) {
-				int length = recv(m_sock, pBuffer + index, BUFFER_SIZE - index, 0);
-				if (length > 0 || (index > 0)) {
-					index += (size_t)length;
-					size_t nLen = index;
-					CPacket pack((BYTE*)pBuffer, nLen);
-					if (nLen > 0) {
-						TRACE("ack pack %d to hWnd %08X %d %d\r\n", pack.sCmd, hWnd, index, nLen);
-						TRACE("%04X\r\n", *(WORD*)(pBuffer + nLen));
-						::SendMessage(hWnd, WM_SEND_PACK_ACK, (WPARAM)new CPacket(pack), data.wParam);
-						if (data.nMode & CSM_AUTOCLOSE) {
-							CloseSocket();
-							return;
-						}
-						index -= nLen;
-						memmove(pBuffer, pBuffer + nLen, index);
-					}
-				}
-				else {//TODO£º¶Ô·½¹Ø±ÕÁËÌ×½Ó×Ö£¬»òÕßÍøÂçÉè±¸Òì³£
-					TRACE("recv failed length %d index %d cmd %d\r\n", length, index, current.sCmd);
-					CloseSocket();
-					::SendMessage(hWnd, WM_SEND_PACK_ACK, (WPARAM)new CPacket(current.sCmd, NULL, 0), 1);
-				}
-			}
-		}
-		else {
-			CloseSocket();
-			//ÍøÂçÖÕÖ¹´¦Àí
-			::SendMessage(hWnd, WM_SEND_PACK_ACK, NULL, -1);
-		}
-	}
-	else {
-		::SendMessage(hWnd, WM_SEND_PACK_ACK, NULL, -2);
+{
+    PACKET_DATA data = *(PACKET_DATA*)wParam;
+    delete (PACKET_DATA*)wParam;
+    HWND hWnd = (HWND)lParam;
+    size_t nTemp = data.strData.size();
+    CPacket current((BYTE*)data.strData.c_str(), nTemp);
+    
+    if (InitSocket() == true) {
+        // âœ… è®¾ç½®æ¥æ”¶è¶…æ—¶
+        DWORD timeout = 5000;  // 5ç§’è¶…æ—¶
+        setsockopt(m_sock, SOL_SOCKET, SO_RCVTIMEO, 
+                  (const char*)&timeout, sizeof(timeout));
+        
+        int ret = send(m_sock, (char*)data.strData.c_str(), 
+                      (int)data.strData.size(), 0);
+        if (ret > 0) {
+            size_t index = 0;
+            std::string strBuffer;
+            strBuffer.resize(BUFFER_SIZE);
+            char* pBuffer = (char*)strBuffer.c_str();
+            
+            bool receivedEndMarker = false;
+            int packetCount = 0;
+            ULONGLONG startTime = GetTickCount64();
+            
+            while (m_sock != INVALID_SOCKET) {
+                // âœ… æ£€æŸ¥è¶…æ—¶
+                if (GetTickCount64() - startTime > 5000) {
+                    TRACE("Receive timeout after 5 seconds\r\n");
+                    CloseSocket();
+                    ::SendMessage(hWnd, WM_SEND_PACK_ACK, NULL, -3);
+                    return;
+                }
+                
+                int length = recv(m_sock, pBuffer + index, 
+                                BUFFER_SIZE - index, 0);
+                
+                if (length > 0 || (index > 0)) {
+                    index += (size_t)length;
+                    
+                    while (index > 0) {
+                        size_t nLen = index;
+                        CPacket pack((BYTE*)pBuffer, nLen);
+                        
+                        if (nLen > 0) {
+                            TRACE("ack pack %d to hWnd %08X count=%d index=%d nLen=%d\r\n", 
+                                  pack.sCmd, hWnd, ++packetCount, index, nLen);
+                            
+                            ::SendMessage(hWnd, WM_SEND_PACK_ACK, 
+                                        (WPARAM)new CPacket(pack), data.wParam);
+                            
+                            // âœ… ä¿®å¤ï¼šæ ¹æ®å‘½ä»¤ç±»å‹åˆ¤æ–­æ˜¯å¦ç»“æŸ
+                            if (pack.sCmd == 2 && pack.strData.size() >= sizeof(FILEINFO)) {
+                                FILEINFO* pInfo = (FILEINFO*)pack.strData.c_str();
+                                if (pInfo->HasNext == FALSE) {
+                                    receivedEndMarker = true;
+                                    TRACE("Received end marker for command 2\r\n");
+                                }
+                            }
+                            else if (pack.sCmd != 2) {
+                                // âœ… å¯¹äºéå‘½ä»¤2ï¼ˆå¦‚1981ã€1ç­‰ï¼‰ï¼Œæ”¶åˆ°å“åº”å°±ç®—ç»“æŸ
+                                receivedEndMarker = true;
+                                TRACE("Received response for command %d, mark as end\r\n", 
+                                      pack.sCmd);
+                            }
+                            
+                            index -= nLen;
+                            memmove(pBuffer, pBuffer + nLen, index);
+                        }
+                        else {
+                            break;
+                        }
+                    }
+                    
+                    // âœ… å¦‚æœæ˜¯ AUTOCLOSE ä¸”æ”¶åˆ°ç»“æŸæ ‡å¿—ï¼Œå…³é—­è¿æ¥
+                    if ((data.nMode & CSM_AUTOCLOSE) && receivedEndMarker) {
+                        TRACE("All data received, closing socket\r\n");
+                        CloseSocket();
+                        return;
+                    }
+                }
+                else {
+                    TRACE("recv failed length %d index %d cmd %d packets=%d\r\n", 
+                          length, index, current.sCmd, packetCount);
+                    CloseSocket();
+                    ::SendMessage(hWnd, WM_SEND_PACK_ACK, 
+                                (WPARAM)new CPacket(current.sCmd, NULL, 0), 1);
+                    return;
+                }
+            }
+        }
+        else {
+            CloseSocket();
+            ::SendMessage(hWnd, WM_SEND_PACK_ACK, NULL, -1);
+        }
+    }
+    else {
+        ::SendMessage(hWnd, WM_SEND_PACK_ACK, NULL, -2);
+    }
+
+	if (data.nMode & CSM_AUTOCLOSE) {
+		CloseSocket();  // âœ… å…³é—­è¿æ¥ï¼ˆçŸ­è¿æ¥æ¨¡å¼ï¼‰
+		return;
 	}
 }
+
+// âŒ åˆ é™¤è¿™æ®µä»£ç  (å› ä¸ºåœ¨ .h ä¸­å·²ç»å†…è”å®šä¹‰)
+/*
+int CClientSocket::DealCommand()
+{
+    // ... è¿™æ®µä»£ç è¦åˆ é™¤ ...
+}
+*/

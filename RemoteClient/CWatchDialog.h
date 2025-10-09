@@ -1,44 +1,59 @@
 ﻿#pragma once
 #ifndef WM_SEND_PACK_ACK
-#define WM_SEND_PACK_ACK (WM_USER+2) //发送包数据应答
+#define WM_SEND_PACK_ACK (WM_USER+2)
 #endif
 
-// CWatchDialog 对话框
+#define WATCH_TIMER_ID 1001  // ✅ 定时器ID
 
 class CWatchDialog : public CDialog
 {
 	DECLARE_DYNAMIC(CWatchDialog)
 
 public:
-	CWatchDialog(CWnd* pParent = nullptr);   // 标准构造函数
+	CWatchDialog(CWnd* pParent = nullptr);
 	virtual ~CWatchDialog();
 
-	// 对话框数据
 #ifdef AFX_DESIGN_TIME
 	enum { IDD = IDD_DLG_WATCH };
 #endif
+
 public:
+	// ✅ 公共成员变量
 	int m_nObjWidth;
 	int m_nObjHeight;
 	CImage m_image;
+	CStatic m_picture;
+	bool isFull;         // ✅ 移到 public,供外部访问
+	
 protected:
-	bool m_isFull;//缓存是否有数据 true表示有缓存数据 false表示没有缓存数据
-	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV 支持
+	// ✅ 保护成员变量
+	bool m_isFull;
+	UINT_PTR m_nTimerID;
+	
+	virtual void DoDataExchange(CDataExchange* pDX);
 	DECLARE_MESSAGE_MAP()
+	
 public:
+	// ✅ 公共成员函数
 	CImage& GetImage() {
 		return m_image;
 	}
+	
 	void SetImageStatus(bool isFull = false) {
 		m_isFull = isFull;
 	}
-	bool isFull() const {
+	
+	bool IsFull() const {  // ✅ getter 函数
 		return m_isFull;
 	}
+	
 	CPoint UserPoint2RemoteScreenPoint(CPoint& point, bool isScreen = false);
+	
 	virtual BOOL OnInitDialog();
+	virtual void OnOK();
+	
+	// ✅ 消息处理函数
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
-	CStatic m_picture;
 	afx_msg LRESULT OnSendPackAck(WPARAM wParam, LPARAM lParam);
 	afx_msg void OnLButtonDblClk(UINT nFlags, CPoint point);
 	afx_msg void OnLButtonDown(UINT nFlags, CPoint point);
@@ -48,7 +63,7 @@ public:
 	afx_msg void OnRButtonUp(UINT nFlags, CPoint point);
 	afx_msg void OnMouseMove(UINT nFlags, CPoint point);
 	afx_msg void OnStnClickedWatch();
-	virtual void OnOK();
 	afx_msg void OnBnClickedBtnLock();
 	afx_msg void OnBnClickedBtnUnlock();
+	afx_msg void OnBnClickedBtnWatch();
 };

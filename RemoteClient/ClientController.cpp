@@ -1,4 +1,4 @@
-#include "pch.h"
+ï»¿#include "pch.h"
 #include "ClientSocket.h"
 #include "ClientController.h"
 
@@ -41,17 +41,24 @@ int CClientController::Invoke(CWnd*& pMainWnd)
 
 bool CClientController::SendCommandPacket(HWND hWnd, int nCmd, bool bAutoClose, BYTE* pData, size_t nLength, WPARAM wParam)
 {
-	TRACE("cmd:%d %s start %lld \r\n", nCmd, __FUNCTION__, GetTickCount64());
-	CClientSocket* pClient = CClientSocket::getInstance();
-	bool ret = pClient->SendPacket(hWnd, CPacket(nCmd, pData, nLength), bAutoClose, wParam);
-	return ret;
+	// âœ… æ·»åŠ è°ƒè¯•æ—¥å¿—
+	TRACE("CClientController::SendCommandPacket: cmd=%d, wParam=%p\r\n", nCmd, wParam);
+	
+	CPacket pack(nCmd, pData, nLength);
+	
+	// âœ… ç¡®ä¿ä¼ é€’ wParam
+	bool ret = CClientSocket::getInstance()->SendPacket(hWnd, pack, bAutoClose, wParam);
+	
+	TRACE("CClientController::SendCommandPacket: SendPacket returned %d\r\n", ret);
+	
+	return ret;  // âœ… ç›´æ¥è¿”å› bool
 }
 
 void CClientController::DownloadEnd()
 {
 	m_statusDlg.ShowWindow(SW_HIDE);
 	m_remoteDlg.EndWaitCursor();
-	m_remoteDlg.MessageBox(_T("ÏÂÔØÍê³É£¡£¡"), _T("Íê³É"));
+	m_remoteDlg.MessageBox(_T("ä¸‹è½½å®Œæˆï¼ï¼"), _T("å®Œæˆ"));
 }
 
 int CClientController::DownFile(CString strPath)
@@ -65,12 +72,12 @@ int CClientController::DownFile(CString strPath)
 		m_strLocal = dlg.GetPathName();
 		FILE* pFile = fopen(m_strLocal, "wb+");
 		if (pFile == NULL) {
-			AfxMessageBox(_T("±¾µØÃ»ÓĞÈ¨ÏŞ±£´æ¸ÃÎÄ¼ş£¬»òÕßÎÄ¼şÎŞ·¨´´½¨£¡£¡£¡"));
+			AfxMessageBox(_T("æœ¬åœ°æ²¡æœ‰æƒé™ä¿å­˜è¯¥æ–‡ä»¶ï¼Œæˆ–è€…æ–‡ä»¶æ— æ³•åˆ›å»ºï¼ï¼ï¼"));
 			return -1;
 		}
 		SendCommandPacket(m_remoteDlg, 4, false, (BYTE*)(LPCSTR)m_strRemote, m_strRemote.GetLength(), (WPARAM)pFile);
 		m_remoteDlg.BeginWaitCursor();
-		m_statusDlg.m_info.SetWindowText(_T("ÃüÁîÕıÔÚÖ´ĞĞÖĞ£¡"));
+		m_statusDlg.m_info.SetWindowText(_T("å‘½ä»¤æ­£åœ¨æ‰§è¡Œä¸­ï¼"));
 		m_statusDlg.ShowWindow(SW_SHOW);
 		m_statusDlg.CenterWindow(&m_remoteDlg);
 		m_statusDlg.SetActiveWindow();
@@ -92,17 +99,17 @@ void CClientController::threadWatchScreen()
 	Sleep(50);
 	ULONGLONG nTick = GetTickCount64();
 	while (!m_isClosed) {
-		if (m_watchDlg.isFull() == false) {
+		if (m_watchDlg.isFull == false) {
 			if (GetTickCount64() - nTick < 200) {
 				Sleep(200 - DWORD(GetTickCount64() - nTick));
 			}
 			nTick = GetTickCount64();
 			int ret = SendCommandPacket(m_watchDlg.GetSafeHwnd(), 6, true, NULL, 0);
 			if (ret == 1) {
-				//TRACE("³É¹¦·¢ËÍÇëÇóÍ¼Æ¬ÃüÁî\r\n");
+				//TRACE("æˆåŠŸå‘é€è¯·æ±‚å›¾ç‰‡å‘½ä»¤\r\n");
 			}
 			else {
-				TRACE("»ñÈ¡Í¼Æ¬Ê§°Ü£¡ret = %d\r\n", ret);
+				TRACE("è·å–å›¾ç‰‡å¤±è´¥ï¼ret = %d\r\n", ret);
 			}
 		}
 		Sleep(1);

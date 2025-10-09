@@ -111,6 +111,9 @@ private:
 			if (worker.IsValid()) {
 				if (WaitForSingleObject(m_hThread, 0) == WAIT_TIMEOUT) {
 					int ret = worker();
+					// ret == 0  → 成功
+					// ret >  0  → 警告（继续执行）
+					// ret <  0  → 错误（清理任务）
 					if (ret != 0) {
 						CString str;
 						str.Format(_T("thread found warning code %d\r\n"), ret);

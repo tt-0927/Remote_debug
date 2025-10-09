@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "pch.h"
 #include <atomic>
 #include <list>
@@ -6,7 +6,7 @@
 
 template<class T>
 class CEdoyunQueue
-{//�̰߳�ȫ�Ķ��У�����IOCPʵ�֣�
+{//线程安全的队列（利用IOCP实现）
 public:
 	enum {
 		EQNone,
@@ -16,9 +16,9 @@ public:
 		EQClear
 	};
 	typedef struct IocpParam {
-		size_t nOperator;//����
-		T Data;//����
-		HANDLE hEvent;//pop������Ҫ��
+		size_t nOperator;//操作
+		T Data;//数据
+		HANDLE hEvent;//pop操作需要的
 		IocpParam(int op, const T& data, HANDLE hEve = NULL) {
 			nOperator = op;
 			Data = data;
@@ -27,7 +27,7 @@ public:
 		IocpParam() {
 			nOperator = EQNone;
 		}
-	}PPARAM;//Post Parameter ����Ͷ����Ϣ�Ľṹ��
+	}PPARAM;//Post Parameter 用于投递信息的结构体
 public:
 	CEdoyunQueue() {
 		m_lock = false;
@@ -184,7 +184,7 @@ protected:
 	std::list<T> m_lstData;
 	HANDLE m_hCompeletionPort;
 	HANDLE m_hThread;
-	std::atomic<bool> m_lock;//������������
+	std::atomic<bool> m_lock;//队列正在析构
 };
 
 
@@ -230,8 +230,14 @@ public:
 	int threadTick() {
 		if (WaitForSingleObject(CEdoyunQueue<T>::m_hThread, 0) != WAIT_TIMEOUT)
 			return 0;
+		
+		// ✅ 只在队列非空时触发发送
 		if (CEdoyunQueue<T>::m_lstData.size() > 0) {
 			PopFront();
+			Sleep(5); // ✅ 给 IOCP 一点时间处理
+		}
+		else {
+			Sleep(10); // 空闲时休眠久一点
 		}
 		return 0;
 	}
@@ -242,13 +248,33 @@ public:
 		case CEdoyunQueue<T>::EQPush:
 			CEdoyunQueue<T>::m_lstData.push_back(pParam->Data);
 			delete pParam;
-			//printf("delete %08p\r\n", (void*)pParam);
+			TRACE("[SendQueue] 数据包已加入队列，当前队列大小=%d\r\n", 
+				  CEdoyunQueue<T>::m_lstData.size());
 			break;
 		case CEdoyunQueue<T>::EQPop:
 			if (CEdoyunQueue<T>::m_lstData.size() > 0) {
 				pParam->Data = CEdoyunQueue<T>::m_lstData.front();
-				if ((m_base->*m_callback)(pParam->Data) == 0)
+				
+				// ✅ 调用回调函数发送数据
+				int ret = (m_base->*m_callback)(pParam->Data);
+				
+				TRACE("[SendQueue] SendData返回值=%d\r\n", ret);
+				
+				// ✅ 只有当返回 -1 时才从队列移除（表示已成功投递发送）
+				// 返回 0 表示暂时无法发送（如上一个包还在发送中）
+				if (ret == -1) {
 					CEdoyunQueue<T>::m_lstData.pop_front();
+					TRACE("[SendQueue] 数据包已处理，队列剩余=%d\r\n", 
+						  CEdoyunQueue<T>::m_lstData.size());
+				}
+				else if (ret == 0) {
+					TRACE("[SendQueue] 数据包等待发送，保留在队列中\r\n");
+				}
+				else {
+					// 发送失败，也从队列移除
+					CEdoyunQueue<T>::m_lstData.pop_front();
+					TRACE("[SendQueue] 数据包发送失败，从队列移除\r\n");
+				}
 			}
 			delete pParam;
 			break;
@@ -260,7 +286,6 @@ public:
 		case CEdoyunQueue<T>::EQClear:
 			CEdoyunQueue<T>::m_lstData.clear();
 			delete pParam;
-			//printf("delete %08p\r\n", (void*)pParam);
 			break;
 		default:
 			OutputDebugStringA("unknown operator!\r\n");
@@ -283,13 +308,13 @@ typedef EdoyunSendQueue<std::vector<char>>::EDYCALLBACK  SENDCALLBACK;
 * 
 * 
 * 
-* ���Բ�����  ����Ҫ��ѧԱ˵����   ѧԱҪ�ο� �ܸ�ʵ�ֲο�
+* 可以不调试  但是要给学员说明白   学员要参考 能给实现参考
 * 
-* ��������汾����
+* 基于这个版本调试
 * 
 * 
 * 
-* ����ʵ��
+* 功能实现
 * 
 * 
 */

@@ -50,7 +50,25 @@ bool ChooseAutoInvoke(const CString& strPath) {
 	}
 	return true;
 }
-void iocp();
+
+void iocp()
+{
+	EdoyunServer server;
+	server.StartService();
+
+	// ✅ 保持服务运行，直到用户明确退出
+	printf("服务已启动，按 'q' 退出...\n");
+	while (true) {
+		char ch = getchar();
+		if (ch == 'q' || ch == 'Q') {
+			printf("正在关闭服务...\n");
+			break;
+		}
+		Sleep(100);  // 避免 CPU 空转
+	}
+
+	printf("服务已停止\n");
+}
 
 void udp_server();
 void udp_client(bool ishost = true);
@@ -119,65 +137,11 @@ void testthread()
 int main(int argc, char* argv[])
 {
 	if (!CEdoyunTool::Init())return 1;
-	//initsock();
-	//if (argc == 1) {
-	//	char wstrDir[MAX_PATH];
-	//	GetCurrentDirectoryA(MAX_PATH, wstrDir);
-	//	STARTUPINFOA si;
-	//	PROCESS_INFORMATION pi;
-	//	memset(&si, 0, sizeof(si));
-	//	memset(&pi, 0, sizeof(pi));
-	//	string strCmd = argv[0];
-	//	strCmd += " 1";
-	//	BOOL bRet = CreateProcessA(NULL, (LPSTR)strCmd.c_str(), NULL, NULL, FALSE, 0, NULL, wstrDir, &si, &pi);
-	//	if (bRet) {
-	//		CloseHandle(pi.hThread);
-	//		CloseHandle(pi.hProcess);
-	//		TRACE("进程ID:%d\r\n", pi.dwProcessId);
-	//		TRACE("线程ID:%d\r\n", pi.dwThreadId);
-	//		strCmd += " 2";
-	//		bRet = CreateProcessA(NULL, (LPSTR)strCmd.c_str(), NULL, NULL, FALSE, 0, NULL, wstrDir, &si, &pi);
-	//		if (bRet) {
-	//			CloseHandle(pi.hThread);
-	//			CloseHandle(pi.hProcess);
-	//			TRACE("进程ID:%d\r\n", pi.dwProcessId);
-	//			TRACE("线程ID:%d\r\n", pi.dwThreadId);
-	//			udp_server();//服务器代码
-	//		}
-	//	}
-	//}
-	//else if (argc == 2) {//就是主客户端
-	//	udp_client();
-	//}
-	//else {//从客户端
-	//	udp_client(false);
-	//}
-	//clearsock();
-	iocp();
-	//testthread();
-	/*
-	if (CEdoyunTool::IsAdmin()) {
-		if (!CEdoyunTool::Init())return 1;
-		if (ChooseAutoInvoke(INVOKE_PATH)) {
-			CCommand cmd;
-			int ret = CServerSocket::getInstance()->Run(&CCommand::RunCommand, &cmd);
-			switch (ret) {
-			case -1:
-				MessageBox(NULL, _T("网络初始化异常，未能成功初始hi，请检查网络状态！"), _T("网络初始化失败"), MB_OK | MB_ICONERROR);
-				break;
-			case -2:
-				MessageBox(NULL, _T("多次无法正常接入用户，结束程序！"), _T("接入用户失败！"), MB_OK | MB_ICONERROR);
-				break;
-			}
-		}
-	}
-	else {
-		if (CEdoyunTool::RunAsAdmin() == false) {
-			CEdoyunTool::ShowError();
-			return 1;
-		}
-	}*/
-	return 0;
+	
+    // ✅ 方式1：直接在主线程运行
+    iocp();
+    
+    return 0;
 }
 
 class COverlapped {
@@ -192,12 +156,8 @@ public:
 	}
 };
 
-void iocp()
-{
-	EdoyunServer server;
-	server.StartService();
-	getchar();
-}
+
+
 /*
 * 1 易用性
 *		a 简化参数

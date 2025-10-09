@@ -18,9 +18,10 @@
 #define IDC_BTN_FILEINFO                1005
 #define IDC_EDIT_INFO                   1006
 #define IDC_BTN_START_WATCH             1007
-#define IDC_WATCH                       1008
-#define IDC_BTN_LOCK                    1009
-#define IDC_BTN_UNLOCK                  1010
+#define IDC_WATCH                       1001
+#define IDC_BTN_LOCK                    1002
+#define IDC_BTN_UNLOCK                  1003
+#define IDC_BTN_WATCH                   1004  // ✅ 新增定义
 #define ID_32771                        32771
 #define ID_32772                        32772
 #define ID_32773                        32773

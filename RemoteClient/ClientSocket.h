@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include "pch.h"
 #include "framework.h"
 #include <string>
@@ -6,8 +6,10 @@
 #include <list>
 #include <map>
 #include <mutex>
-#define WM_SEND_PACK (WM_USER+1) //·¢ËÍ°üÊı¾İ
-#define WM_SEND_PACK_ACK (WM_USER+2) //·¢ËÍ°üÊı¾İÓ¦´ğ
+
+#define WM_SEND_PACK (WM_USER+1)
+#define WM_SEND_PACK_ACK (WM_USER+2)
+
 #pragma pack(push)
 #pragma pack(1)
 class CPacket
@@ -47,12 +49,12 @@ public:
 				break;
 			}
 		}
-		if (i + 4 + 2 + 2 > nSize) {//°üÊı¾İ¿ÉÄÜ²»È«£¬»òÕß°üÍ·Î´ÄÜÈ«²¿½ÓÊÕµ½
+		if (i + 4 + 2 + 2 > nSize) {
 			nSize = 0;
 			return;
 		}
 		nLength = *(DWORD*)(pData + i); i += 4;
-		if (nLength + i > nSize) {//°üÎ´ÍêÈ«½ÓÊÕµ½£¬¾Í·µ»Ø£¬½âÎöÊ§°Ü
+		if (nLength + i > nSize) {
 			nSize = 0;
 			return;
 		}
@@ -70,7 +72,7 @@ public:
 			sum += BYTE(strData[j]) & 0xFF;
 		}
 		if (sum == sSum) {
-			nSize = i;//head2 length4 data...
+			nSize = i;
 			return;
 		}
 		nSize = 0;
@@ -86,7 +88,7 @@ public:
 		}
 		return *this;
 	}
-	int Size() {//°üÊı¾İµÄ´óĞ¡
+	int Size() {
 		return nLength + 6;
 	}
 	const char* Data(std::string& strOut) const {
@@ -101,11 +103,11 @@ public:
 	}
 
 public:
-	WORD sHead;//¹Ì¶¨Î» 0xFEFF
-	DWORD nLength;//°ü³¤¶È£¨´Ó¿ØÖÆÃüÁî¿ªÊ¼£¬µ½ºÍĞ£Ñé½áÊø£©
-	WORD sCmd;//¿ØÖÆÃüÁî
-	std::string strData;//°üÊı¾İ
-	WORD sSum;//ºÍĞ£Ñé
+	WORD sHead;
+	DWORD nLength;
+	WORD sCmd;
+	std::string strData;
+	WORD sSum;
 };
 #pragma pack(pop)
 
@@ -116,9 +118,9 @@ typedef struct MouseEvent {
 		ptXY.x = 0;
 		ptXY.y = 0;
 	}
-	WORD nAction;//µã»÷¡¢ÒÆ¶¯¡¢Ë«»÷
-	WORD nButton;//×ó¼ü¡¢ÓÒ¼ü¡¢ÖĞ¼ü
-	POINT ptXY;//×ø±ê
+	WORD nAction;
+	WORD nButton;
+	POINT ptXY;
 }MOUSEEV, * PMOUSEEV;
 
 typedef struct file_info {
@@ -128,15 +130,14 @@ typedef struct file_info {
 		HasNext = TRUE;
 		memset(szFileName, 0, sizeof(szFileName));
 	}
-	BOOL IsInvalid;//ÊÇ·ñÓĞĞ§
-	BOOL IsDirectory;//ÊÇ·ñÎªÄ¿Â¼ 0 ·ñ 1 ÊÇ
-	BOOL HasNext;//ÊÇ·ñ»¹ÓĞºóĞø 0 Ã»ÓĞ 1 ÓĞ
-	char szFileName[256];//ÎÄ¼şÃû
+	BOOL IsInvalid;
+	BOOL IsDirectory;
+	BOOL HasNext;
+	char szFileName[256];
 }FILEINFO, * PFILEINFO;
 
-
 enum {
-	CSM_AUTOCLOSE = 1,//CSM = Client Socket Mode ×Ô¶¯¹Ø±ÕÄ£Ê½
+	CSM_AUTOCLOSE = 1,
 };
 
 typedef struct PacketData {
@@ -166,23 +167,24 @@ typedef struct PacketData {
 
 std::string GetErrInfo(int wsaErrCode);
 void Dump(BYTE* pData, size_t nSize);
+
 class CClientSocket
 {
 public:
 	static CClientSocket* getInstance() {
-		if (m_instance == NULL) {//¾²Ì¬º¯ÊıÃ»ÓĞthisÖ¸Õë£¬ËùÒÔÎŞ·¨Ö±½Ó·ÃÎÊ³ÉÔ±±äÁ¿
+		if (m_instance == NULL) {
 			m_instance = new CClientSocket();
 			TRACE("CClientSocket size is %d\r\n", sizeof(*m_instance));
 		}
 		return m_instance;
 	}
+	
 	bool InitSocket();
-
 
 #define BUFFER_SIZE 4096000
 	int DealCommand() {
 		if (m_sock == -1)return -1;
-		char* buffer = m_buffer.data();//TODO:¶àÏß³Ì·¢ËÍÃüÁîÊ±¿ÉÄÜ»á³öÏÖ³åÍ»
+		char* buffer = m_buffer.data();
 		static size_t index = 0;
 		while (true) {
 			size_t len = recv(m_sock, buffer + index, BUFFER_SIZE - index, 0);
@@ -203,8 +205,9 @@ public:
 		}
 		return -1;
 	}
-	//bool SendPacket(const CPacket& pack, std::list<CPacket>& lstPacks, bool isAutoClosed = true);
+	
 	bool SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClosed = true, WPARAM wParam = 0);
+	
 	bool GetFilePath(std::string& strPath) {
 		if ((m_packet.sCmd >= 2) && (m_packet.sCmd <= 4)) {
 			strPath = m_packet.strData;
@@ -212,6 +215,7 @@ public:
 		}
 		return false;
 	}
+	
 	bool GetMouseEvent(MOUSEEV& mouse) {
 		if (m_packet.sCmd == 5) {
 			memcpy(&mouse, m_packet.strData.c_str(), sizeof(MOUSEEV));
@@ -219,46 +223,70 @@ public:
 		}
 		return false;
 	}
+	
 	CPacket& GetPacket() {
 		return m_packet;
 	}
+	
 	void CloseSocket() {
-		closesocket(m_sock);
-		m_sock = INVALID_SOCKET;
+		if (m_sock != INVALID_SOCKET) {
+			shutdown(m_sock, SD_SEND);
+			char buf[1024];
+			int count = 0;
+			while (count++ < 10) {
+				int ret = recv(m_sock, buf, sizeof(buf), 0);
+				if (ret <= 0) break;
+			}
+			closesocket(m_sock);
+			m_sock = INVALID_SOCKET;
+			TRACE("Socket closed gracefully\r\n");
+		}
 	}
+	
 	void UpdateAddress(int nIP, int nPort) {
 		if ((m_nIP != nIP) || (m_nPort != nPort)) {
 			m_nIP = nIP;
 			m_nPort = nPort;
 		}
 	}
+	
+	// âœ… æ–°å¢: åœæ­¢ç›‘æ§
+	void StopMonitoring() {
+		m_bMonitoring = false;
+		m_bAutoClose = true;
+		CloseSocket();
+	}
+
 private:
-	HANDLE m_eventInvoke;//Æô¶¯ÊÂ¼ş
+	HANDLE m_eventInvoke;
 	UINT m_nThreadID;
 	typedef void(CClientSocket::* MSGFUNC)(UINT nMsg, WPARAM wParam, LPARAM lParam);
 	std::map<UINT, MSGFUNC> m_mapFunc;
 	HANDLE m_hThread;
-	bool m_bAutoClose;
+	bool m_bAutoClose;        // âœ… æ–°å¢æˆå‘˜å˜é‡
+	bool m_bMonitoring;       // âœ… æ–°å¢æˆå‘˜å˜é‡
 	std::mutex m_lock;
 	std::list<CPacket> m_lstSend;
 	std::map<HANDLE, std::list<CPacket>&> m_mapAck;
 	std::map<HANDLE, bool> m_mapAutoClosed;
-	int m_nIP;//µØÖ·
-	int m_nPort;//¶Ë¿Ú
+	int m_nIP;
+	int m_nPort;
 	std::vector<char> m_buffer;
 	SOCKET m_sock;
 	CPacket m_packet;
+	
 	CClientSocket& operator=(const CClientSocket& ss) {}
 	CClientSocket(const CClientSocket& ss);
-	CClientSocket();
+	CClientSocket();  // âœ… åªå£°æ˜,åœ¨ .cpp ä¸­å®šä¹‰
 	~CClientSocket() {
 		closesocket(m_sock);
 		m_sock = INVALID_SOCKET;
 		WSACleanup();
 	}
+	
 	static unsigned __stdcall threadEntry(void* arg);
-	//void threadFunc();
 	void threadFunc2();
+	
 	BOOL InitSockEnv() {
 		WSADATA data;
 		if (WSAStartup(MAKEWORD(1, 1), &data) != 0) {
@@ -266,6 +294,7 @@ private:
 		}
 		return TRUE;
 	}
+	
 	static void releaseInstance() {
 		TRACE("CClientSocket has been called!\r\n");
 		if (m_instance != NULL) {
@@ -275,13 +304,16 @@ private:
 			TRACE("CClientSocket has released!\r\n");
 		}
 	}
+	
 	bool Send(const char* pData, int nSize) {
 		if (m_sock == -1)return false;
 		return send(m_sock, pData, nSize, 0) > 0;
 	}
 	bool Send(const CPacket& pack);
-	void SendPack(UINT nMsg, WPARAM wParam/*»º³åÇøµÄÖµ*/, LPARAM lParam/*»º³åÇøµÄ³¤¶È*/);
+	void SendPack(UINT nMsg, WPARAM wParam, LPARAM lParam);
+	
 	static CClientSocket* m_instance;
+	
 	class CHelper {
 	public:
 		CHelper() {

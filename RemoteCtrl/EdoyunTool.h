@@ -13,6 +13,7 @@ public:
 			strOut += buf;
 		}
 		strOut += "\n";
+
 		OutputDebugStringA(strOut.c_str());
 	}
 

@@ -270,12 +270,13 @@ void CClientSocket::SendPack(UINT nMsg, WPARAM wParam, LPARAM lParam)
     PACKET_DATA data = *(PACKET_DATA*)wParam;
     delete (PACKET_DATA*)wParam;
     HWND hWnd = (HWND)lParam;
+    
     size_t nTemp = data.strData.size();
     CPacket current((BYTE*)data.strData.c_str(), nTemp);
     
     if (InitSocket() == true) {
-        // ✅ 设置接收超时
-        DWORD timeout = 5000;  // 5秒超时
+        // 设置接收超时
+        DWORD timeout = 5000;
         setsockopt(m_sock, SOL_SOCKET, SO_RCVTIMEO, 
                   (const char*)&timeout, sizeof(timeout));
         
@@ -292,7 +293,7 @@ void CClientSocket::SendPack(UINT nMsg, WPARAM wParam, LPARAM lParam)
             ULONGLONG startTime = GetTickCount64();
             
             while (m_sock != INVALID_SOCKET) {
-                // ✅ 检查超时
+                // 检查超时
                 if (GetTickCount64() - startTime > 5000) {
                     TRACE("Receive timeout after 5 seconds\r\n");
                     CloseSocket();
@@ -317,16 +318,29 @@ void CClientSocket::SendPack(UINT nMsg, WPARAM wParam, LPARAM lParam)
                             ::SendMessage(hWnd, WM_SEND_PACK_ACK, 
                                         (WPARAM)new CPacket(pack), data.wParam);
                             
-                            // ✅ 修复：根据命令类型判断是否结束
-                            if (pack.sCmd == 2 && pack.strData.size() >= sizeof(FILEINFO)) {
-                                FILEINFO* pInfo = (FILEINFO*)pack.strData.c_str();
-                                if (pInfo->HasNext == FALSE) {
-                                    receivedEndMarker = true;
-                                    TRACE("Received end marker for command 2\r\n");
+                            // ✅ 根据命令类型判断是否结束
+                            if (pack.sCmd == 2) {
+                                // 命令2: 文件列表
+                                if (pack.strData.size() >= sizeof(FILEINFO)) {
+                                    FILEINFO* pInfo = (FILEINFO*)pack.strData.c_str();
+                                    if (pInfo->HasNext == FALSE) {
+                                        receivedEndMarker = true;
+                                        TRACE("Received end marker for command 2\r\n");
+                                    }
                                 }
                             }
-                            else if (pack.sCmd != 2) {
-                                // ✅ 对于非命令2（如1981、1等），收到响应就算结束
+                            else if (pack.sCmd == 5) {
+                                // ✅ 命令5: 鼠标操作 - **不标记为结束!**
+                                TRACE("Received mouse response for command 5, keep connection alive\r\n");
+                                receivedEndMarker = false;  // ← 保持连接!
+                            }
+                            else if (pack.sCmd == 6) {
+                                // ✅ 命令6: 远程监控 - **不标记为结束!**
+                                TRACE("Received screen capture for command 6, keep connection alive\r\n");
+                                receivedEndMarker = false;  // ← 保持连接!
+                            }
+                            else {
+                                // 其他命令(1,3,4,7,8,9,1981): 收到响应就结束
                                 receivedEndMarker = true;
                                 TRACE("Received response for command %d, mark as end\r\n", 
                                       pack.sCmd);
@@ -340,7 +354,7 @@ void CClientSocket::SendPack(UINT nMsg, WPARAM wParam, LPARAM lParam)
                         }
                     }
                     
-                    // ✅ 如果是 AUTOCLOSE 且收到结束标志，关闭连接
+                    // ✅ 如果是 AUTOCLOSE 且收到结束标志,才关闭连接
                     if ((data.nMode & CSM_AUTOCLOSE) && receivedEndMarker) {
                         TRACE("All data received, closing socket\r\n");
                         CloseSocket();

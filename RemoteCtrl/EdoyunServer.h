@@ -115,134 +115,116 @@ public:
 
 #define BUFFER_SIZE 4096
 template<EdoyunOperator>
-class RecvOverlapped :public EdoyunOverlapped, ThreadFuncBase
-{
+class RecvOverlapped :public EdoyunOverlapped {
 public:
+    std::vector<char> m_buffer;
+    WSABUF m_wsabuffer;
+    
     RecvOverlapped();
+    
+    // ✅ Recv Worker 处理函数
     int RecvWorker() {
-        TRACE("[RecvWorker] 开始处理接收数据，socket=%d，this=%p，线程ID=%d\r\n", 
+        TRACE("[RecvWorker] 开始处理接收数据，socket=%d，this=%p，线程ID=%d\r\n",
               m_client->m_sock, this, GetCurrentThreadId());
         
-        std::list<CPacket> lstPackets;
+        // ✅ 使用保存的传输字节数
+        DWORD nBytes = m_transferred;  // ← 使用 threadIocp 传递的值!
         
-        // ✅ 使用 m_transferred 而不是 m_wsabuffer.len
-        size_t nLen = m_transferred;
-        TRACE("[RecvWorker] 接收到 %d 字节数据\r\n", nLen);
-        
-        if (nLen > 0) {
-            // ✅ 2. 输出接收到的原始数据
-            CEdoyunTool::Dump((BYTE*)m_buffer.data(), nLen);
-            
-            // ✅ 3. 累加到客户端缓冲区
-            if (m_client->m_used + nLen > m_client->m_buffer.size()) {
-                TRACE("[RecvWorker] 缓冲区溢出，m_used=%d，nLen=%d\r\n", 
-                      m_client->m_used, nLen);
-                return -1;
-            }
-            
-            memcpy(m_client->m_buffer.data() + m_client->m_used, 
-                   m_buffer.data(), nLen);
-            m_client->m_used += nLen;
-            
-            // ✅ 4. 尝试解析数据包
-            size_t parseLen = m_client->m_used;
-            m_client->m_packet = CPacket((BYTE*)m_client->m_buffer.data(), parseLen);
-            
-            TRACE("[RecvWorker] 解析数据包，命令=%d，解析长度=%d\r\n", 
-                  m_client->m_packet.sCmd, parseLen);
-            
-            if (parseLen > 0) {
-                // ✅ 5. 移除已解析的数据
-                memmove(m_client->m_buffer.data(), 
-                       m_client->m_buffer.data() + parseLen, 
-                       m_client->m_used - parseLen);
-                m_client->m_used -= parseLen;
-                
-                // ✅ 6. 执行命令
-                TRACE("[RecvWorker] 执行命令 %d\r\n", m_client->m_packet.sCmd);
-                m_client->cmd.ExcuteCommand(m_client->m_packet.sCmd, 
-                                           lstPackets, 
-                                           m_client->m_packet);
-                
-                TRACE("[RecvWorker] 命令执行完成，响应包数量=%d\r\n", lstPackets.size());
-                
-                // ✅ 7. 将所有响应包加入发送队列
-                int queueCount = 0;
-                while (lstPackets.size() > 0) {
-                    const char* pData = lstPackets.front().Data();
-                    int nSize = lstPackets.front().Size();
-                    
-                    int ret = m_client->Send((void*)pData, nSize);
-                    if (ret < 0) {
-                        TRACE("[RecvWorker] 加入发送队列失败\r\n");
-                        return -1;
-                    }
-                    queueCount++;
-                    lstPackets.pop_front();
-                }
-                TRACE("[RecvWorker] 已加入 %d 个响应包到发送队列\r\n", queueCount);
-            }
-            else {
-                TRACE("[RecvWorker] 数据包不完整，等待更多数据\r\n");
-            }
+        // ✅ 打印接收到的数据
+        if (nBytes > 0) {
+            TRACE("[RecvWorker] 接收到 %d 字节数据\r\n", nBytes);
+            CEdoyunTool::Dump((BYTE*)m_buffer.data(), nBytes);
         }
         else {
-            // ✅ 接收到 0 字节，说明连接关闭
-            TRACE("[RecvWorker] 接收到 0 字节，连接已关闭\r\n");
+            TRACE("[RecvWorker] 接收到 0 字节，连接可能已关闭\r\n");
+            return -1;  // ✅ 不继续处理
+        }
+        
+        // ✅ 解析数据包
+        std::list<CPacket> lstPackets;
+        size_t nUsed = 0;
+        
+        while (nUsed < nBytes) {
+            size_t nParsed = nBytes - nUsed;
+            CPacket packet((BYTE*)(m_buffer.data() + nUsed), nParsed);
+            
+            if (nParsed == 0) {
+                TRACE("[RecvWorker] 数据包解析失败，剩余%d字节不足\r\n", nBytes - nUsed);
+                break;
+            }
+            
+            TRACE("[RecvWorker] 解析数据包，命令=%d，解析长度=%d\r\n", 
+                  packet.sCmd, nParsed);
+            
+            nUsed += nParsed;
+            
+            // ✅ 执行命令
+            TRACE("[RecvWorker] 执行命令 %d\r\n", packet.sCmd);
+            m_client->cmd.ExcuteCommand(packet.sCmd, lstPackets, packet);
+        }
+        
+        TRACE("[RecvWorker] 命令执行完成，响应包数量=%d\r\n", lstPackets.size());
+        
+        // ✅ 发送响应包
+        while (lstPackets.size() > 0) {
+            CPacket& response = lstPackets.front();
+            m_client->Send((void*)response.Data(), response.Size());
+            lstPackets.pop_front();
+        }
+        
+        TRACE("[RecvWorker] 已加入 %d 个响应包到发送队列\r\n", lstPackets.size());
+        
+        // ✅ 关键修复: 重新投递接收操作 (复用同一个缓冲区)
+        // ✅ 重置 WSABUF 指向原始缓冲区
+        m_wsabuffer.buf = m_buffer.data();
+        m_wsabuffer.len = m_buffer.size();  // ✅ 恢复到完整容量!
+        
+        DWORD dwFlags = 0;
+        DWORD dwReceived = 0;
+        int ret = WSARecv(m_client->m_sock, 
+                         &m_wsabuffer, 1, 
+                         &dwReceived, &dwFlags, 
+                         &m_overlapped, NULL);
+        
+        if (ret == SOCKET_ERROR && (WSAGetLastError() != WSA_IO_PENDING)) {
+            int error = WSAGetLastError();
+            TRACE("[RecvWorker] 重新投递WSARecv失败，错误码=%d\r\n", error);
             return -1;
         }
         
-        // ✅ 8. 重新投递异步接收操作
-        // ✅ 注意：不要修改 m_wsabuffer.len！它必须保持为缓冲区大小
-        m_wsabuffer.buf = m_buffer.data();
-        m_wsabuffer.len = m_buffer.size();  // ✅ 始终是缓冲区大小
-        DWORD dwFlags = 0;
-        DWORD dwReceived = 0;
-        
-        int ret = WSARecv(m_client->m_sock, &m_wsabuffer, 1, &dwReceived, 
-                         &dwFlags, &m_overlapped, NULL);
-        if (ret == SOCKET_ERROR) {
-            int error = WSAGetLastError();
-            if (error != WSA_IO_PENDING) {
-                TRACE("[RecvWorker] WSARecv 失败，错误码=%d\r\n", error);
-                return -1;
-            }
-        }
-        
         TRACE("[RecvWorker] 已重新投递接收操作，缓冲区大小=%d\r\n", m_wsabuffer.len);
-        return -1;
+        return -1;  // ✅ 返回-1，告诉线程池清理 worker
     }
 };
 
 template<EdoyunOperator>
-class SendOverlapped :public EdoyunOverlapped, ThreadFuncBase
-{
+class SendOverlapped :public EdoyunOverlapped {
 public:
-	SendOverlapped();
-	int SendWorker() {
-		TRACE("[SendWorker] 发送完成通知，socket=%d，this=%p，线程ID=%d\r\n", 
-		      m_client->m_sock, this, GetCurrentThreadId());
-		
-		// ✅ 1. 当前数据已发送完成，清空缓冲区
-		if (m_client->sendbuf.size() > 0) {
-			TRACE("[SendWorker] 已发送 %d 字节\r\n", m_client->sendbuf.size());
-			CEdoyunTool::Dump((BYTE*)m_client->sendbuf.data(), 
-                             m_client->sendbuf.size());
-			m_client->sendbuf.clear();
-		}
-		
-		// ✅ 2. 检查发送队列，继续发送下一个数据包
-		if (m_client->m_vecSend.Size() > 0) {
-			TRACE("[SendWorker] 发送队列还有 %d 个包，触发下一次发送\r\n", 
-                  m_client->m_vecSend.Size());
-			// 注意：不要在这里调用 PopFront，让队列的 threadTick 自动处理
-		}
-		else {
-			TRACE("[SendWorker] 发送队列为空\r\n");
-		}
-		
-		return -1; // 任务完成
-	}
+    std::vector<char> m_buffer;
+    WSABUF m_wsabuffer;
+    
+    SendOverlapped();
+    
+    // ✅ Send Worker 处理函数
+    int SendWorker() {
+        TRACE("[SendWorker] 发送完成通知，socket=%d，this=%p，线程ID=%d\r\n",
+              m_client->m_sock, this, GetCurrentThreadId());
+        
+        DWORD nBytes = m_transferred;
+        TRACE("[SendWorker] 已发送 %d 字节\r\n", nBytes);
+        
+        if (nBytes > 0) {
+            CEdoyunTool::Dump((BYTE*)m_buffer.data(), nBytes);
+        }
+        
+        // ✅ 关键修复: 清空客户端的发送缓冲区
+        m_client->sendbuf.clear();
+        
+        TRACE("[SendWorker] 发送缓冲区已清空，队列剩余=%d\r\n", 
+              m_client->m_vecSend.Size());
+        
+        return -1;  // 返回-1，清理 worker
+    }
 };
 typedef SendOverlapped<ESend> SENDOVERLAPPED;
 

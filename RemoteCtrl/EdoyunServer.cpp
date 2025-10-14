@@ -77,14 +77,14 @@ inline RecvOverlapped<op>::RecvOverlapped() {
 	m_worker = ThreadWorker(this, (FUNCTYPE)&RecvOverlapped<op>::RecvWorker);
 	memset(&m_overlapped, 0, sizeof(m_overlapped));
 	
-	// ✅ 缓冲区大小
+	// 缓冲区大小
 	m_buffer.resize(1024 * 256);
 	
-	// ✅ 初始化 WSABUF
+	// 初始化 WSABUF
 	m_wsabuffer.buf = m_buffer.data();
-	m_wsabuffer.len = m_buffer.size();  // ✅ 缓冲区容量
+	m_wsabuffer.len = m_buffer.size();  // 缓冲区容量
 	
-	m_transferred = 0;  // ✅ 初始化传输字节数
+	m_transferred = 0;  // 初始化传输字节数
 	
 	TRACE("[线程] RecvOverlapped构造函数：初始化Recv工作线程，this=%p，缓冲区大小=%d\r\n", 
 	      this, m_wsabuffer.len);
@@ -166,8 +166,7 @@ int EdoyunClient::Send(void* buffer, size_t nSize)
 	std::vector<char> data(nSize);
 	memcpy(data.data(), buffer, nSize);
 
-	TRACE("[Send] Queuing data packet, size=%d, queue_size=%d\r\n",
-		nSize, m_vecSend.Size());
+	TRACE("[Send] Queuing data packet, size=%d, queue_size=%d\r\n", nSize, m_vecSend.Size());
 
 	if (m_vecSend.PushBack(data)) {
 		return 0;
@@ -177,10 +176,9 @@ int EdoyunClient::Send(void* buffer, size_t nSize)
 
 int EdoyunClient::SendData(std::vector<char>& data)
 {
-	// ✅ 检查是否有正在发送的数据
+	// 检查是否有正在发送的数据
 	if (sendbuf.size() > 0) {
-		TRACE("[SendData] 上一个数据包还在发送中，等待完成，当前队列=%d\r\n", 
-		      m_vecSend.Size());
+		TRACE("[SendData] 上一个数据包还在发送中，等待完成，当前队列=%d\r\n", m_vecSend.Size());
 		return 0; // 返回0表示等待，不从队列移除
 	}
 	
@@ -189,18 +187,18 @@ int EdoyunClient::SendData(std::vector<char>& data)
 		return 0;
 	}
 	
-	// ✅ 复制数据到发送缓冲区
+	// 复制数据到发送缓冲区
 	sendbuf.resize(data.size());
 	memcpy(sendbuf.data(), data.data(), data.size());
 	
 	TRACE("[SendData] 准备发送 %d 字节，队列剩余=%d\r\n", 
 	      sendbuf.size(), m_vecSend.Size());
 	
-	// ✅ 设置 WSABUF
+	// 设置 WSABUF
 	m_send->m_wsabuffer.buf = sendbuf.data();
 	m_send->m_wsabuffer.len = sendbuf.size();
 	
-	// ✅ 投递异步发送操作
+	// 投递异步发送操作
 	DWORD dwSent = 0;
 	int ret = WSASend(m_sock, &m_send->m_wsabuffer, 1, &dwSent, 
 	                 0, &m_send->m_overlapped, NULL);
@@ -211,7 +209,7 @@ int EdoyunClient::SendData(std::vector<char>& data)
 			TRACE("[SendData] WSASend 失败，错误码=%d\r\n", error);
 			CEdoyunTool::ShowError();
 			sendbuf.clear();
-			return -1; // 发送失败，从队列移除
+			return -1; // 发送失败，从队列移除        
 		}
 	}
 	
@@ -258,7 +256,7 @@ bool EdoyunServer::StartService()
 	
 	CreateIoCompletionPort((HANDLE)m_sock, m_hIOCP, (ULONG_PTR)this, 0);
 	
-	// ✅ 设置运行标志
+	// 设置运行标志
 	m_bRunning = true;
 	
 	TRACE("[线程] StartService：启动线程池，创建4个工作线程，this=%p\r\n", this);
@@ -329,13 +327,13 @@ void EdoyunServer::BindNewSocket(SOCKET s)
 	TRACE("[线程] BindNewSocket：将socket=%d绑定到IOCP，this=%p\r\n", s, this);
 }
 
-// ✅ 修改后的 threadIocp - 永久循环
+// 修改永久循环
 int EdoyunServer::threadIocp()
 {
     TRACE("[线程] threadIocp：IOCP监听线程启动，this=%p，线程ID=%d\r\n", 
           this, GetCurrentThreadId());
     
-    // ✅ 循环处理所有 IOCP 事件
+    // 循环处理所有 IOCP 事件
     while (m_bRunning) {
         DWORD tranferred = 0;
         ULONG_PTR CompletionKey = 0;
@@ -343,20 +341,17 @@ int EdoyunServer::threadIocp()
         
         TRACE("[线程] threadIocp：等待IO完成通知...\r\n");
         
-        BOOL ret = GetQueuedCompletionStatus(m_hIOCP, &tranferred, &CompletionKey, 
-                                            &lpOverlapped, INFINITE);
+        BOOL ret = GetQueuedCompletionStatus(m_hIOCP, &tranferred, &CompletionKey, &lpOverlapped, INFINITE);
         
         if (!ret) {
             int error = WSAGetLastError();
             TRACE("[线程] threadIocp：GetQueuedCompletionStatus 失败，错误码=%d\r\n", error);
             
             if (lpOverlapped != NULL) {
-                EdoyunOverlapped* pOverlapped = CONTAINING_RECORD(lpOverlapped, 
-                                                                 EdoyunOverlapped, 
-                                                                 m_overlapped);
+                EdoyunOverlapped* pOverlapped = CONTAINING_RECORD(lpOverlapped, EdoyunOverlapped,  m_overlapped);
                 TRACE("[线程] threadIocp：操作类型=%d 失败\r\n", pOverlapped->m_operator);
                 
-                // ✅ 如果是接收失败且字节数为0，说明连接关闭
+                // 如果是接收失败且字节数为0，说明连接关闭
                 if (pOverlapped->m_operator == ERecv && tranferred == 0) {
                     TRACE("[线程] threadIocp：客户端连接已关闭\r\n");
                     // 清理客户端
@@ -373,21 +368,18 @@ int EdoyunServer::threadIocp()
             continue;  // 继续处理下一个事件
         }
         
-        // ✅ 检查退出信号
+        // 检查退出信号
         if (CompletionKey == 0) {
             TRACE("[线程] threadIocp：收到退出信号\r\n");
             break;
         }
         
-        EdoyunOverlapped* pOverlapped = CONTAINING_RECORD(lpOverlapped, 
-                                                         EdoyunOverlapped, 
-                                                         m_overlapped);
+        EdoyunOverlapped* pOverlapped = CONTAINING_RECORD(lpOverlapped, EdoyunOverlapped,  m_overlapped);
         
-        TRACE("[线程] threadIocp：收到IO完成通知，操作类型=%d，传输字节=%d\r\n", 
-              pOverlapped->m_operator, tranferred);
+        TRACE("[线程] threadIocp：收到IO完成通知，操作类型=%d，传输字节=%d\r\n", pOverlapped->m_operator, tranferred);
         
         pOverlapped->m_server = this;
-        // ✅ 正确传递：将字节数保存到 m_transferred
+        // 正确传递：将字节数保存到 m_transferred
         pOverlapped->m_transferred = tranferred;
         
         switch (pOverlapped->m_operator) {
@@ -401,14 +393,10 @@ int EdoyunServer::threadIocp()
         case ERecv:
         {
             RECVOVERLAPPED* pOver = (RECVOVERLAPPED*)pOverlapped;
-            // ✅ 不再修改 m_wsabuffer.len！
-            TRACE("[线程] threadIocp：分配Recv处理线程，接收=%d字节，this=%p\r\n", 
-                  tranferred, this);
+            TRACE("[线程] threadIocp：分配Recv处理线程，接收=%d字节，this=%p\r\n", tranferred, this);
             
-            // ✅ 如果接收到 0 字节，说明连接关闭
             if (tranferred == 0) {
-                TRACE("[线程] threadIocp：客户端连接关闭，socket=%d\r\n", 
-                      pOver->m_client->m_sock);
+                TRACE("[线程] threadIocp：客户端连接关闭，socket=%d\r\n", pOver->m_client->m_sock);
                 // 不再投递 worker，直接清理
                 SOCKET sock = pOver->m_client->m_sock;
                 auto it = m_client.find(sock);
@@ -442,15 +430,15 @@ int EdoyunServer::threadIocp()
     return -1;  // 返回-1，清理工作线程的任务
 }
 
-// ✅ 析构函数中停止 IOCP 线程
+// 析构函数中停止 IOCP 线程
 EdoyunServer::~EdoyunServer()
 {
     TRACE("[线程] EdoyunServer析构函数：开始停止服务和线程池，this=%p\r\n", this);
     
-    // ✅ 设置停止标志
+    // 设置停止标志
     m_bRunning = false;
     
-    // ✅ 向IOCP投递退出信号
+    // 向IOCP投递退出信号
     if (m_hIOCP != NULL && m_hIOCP != INVALID_HANDLE_VALUE) {
         PostQueuedCompletionStatus(m_hIOCP, 0, 0, NULL);
     }

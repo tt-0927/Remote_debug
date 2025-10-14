@@ -41,17 +41,17 @@ int CClientController::Invoke(CWnd*& pMainWnd)
 
 bool CClientController::SendCommandPacket(HWND hWnd, int nCmd, bool bAutoClose, BYTE* pData, size_t nLength, WPARAM wParam)
 {
-	// ✅ 添加调试日志
+	// 添加调试日志
 	TRACE("CClientController::SendCommandPacket: cmd=%d, wParam=%p\r\n", nCmd, wParam);
 	
 	CPacket pack(nCmd, pData, nLength);
 	
-	// ✅ 确保传递 wParam
+	// 确保传递 wParam
 	bool ret = CClientSocket::getInstance()->SendPacket(hWnd, pack, bAutoClose, wParam);
 	
 	TRACE("CClientController::SendCommandPacket: SendPacket returned %d\r\n", ret);
 	
-	return ret;  // ✅ 直接返回 bool
+	return ret;  // 直接返回 bool
 }
 
 void CClientController::DownloadEnd()
@@ -99,7 +99,7 @@ void CClientController::threadWatchScreen()
 	Sleep(50);
 	ULONGLONG nTick = GetTickCount64();
 	while (!m_isClosed) {
-		if (m_watchDlg.isFull == false) {
+		if (m_watchDlg.m_isFull == false) {
 			if (GetTickCount64() - nTick < 200) {
 				Sleep(200 - DWORD(GetTickCount64() - nTick));
 			}
@@ -168,4 +168,25 @@ LRESULT CClientController::OnShowStatus(UINT nMsg, WPARAM wParam, LPARAM lParam)
 LRESULT CClientController::OnShowWatcher(UINT nMsg, WPARAM wParam, LPARAM lParam)
 {
 	return m_watchDlg.DoModal();
+}
+
+// 1. 开始远程监控（建立长连接）
+bool CClientController::StartWatch(HWND hWnd)
+{
+	TRACE("CClientController::StartWatch - 正在请求建立监控长连接...\r\n");
+	return CClientSocket::getInstance()->ConnectWatch(hWnd);
+}
+
+// 2. 停止远程监控（断开长连接）
+void CClientController::StopWatch()
+{
+	TRACE("CClientController::StopWatch - 正在断开监控长连接...\r\n");
+	CClientSocket::getInstance()->DisconnectWatch();
+}
+
+// 3. 通过长连接发送命令
+bool CClientController::SendCommandWatch(int nCmd, BYTE* pData, size_t nLength)
+{
+	CPacket pack(nCmd, pData, nLength);
+	return CClientSocket::getInstance()->SendWatchPacket(pack);
 }

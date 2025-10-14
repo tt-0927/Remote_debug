@@ -141,9 +141,9 @@ enum {
 };
 
 typedef struct PacketData {
-	std::string strData;
-	UINT nMode;
-	WPARAM wParam;
+	std::string strData;// 原始二进制数据 
+	UINT nMode;// 连接模式
+	WPARAM wParam;// 发送消息时的附加参数
 	PacketData(const char* pData, size_t nLen, UINT mode, WPARAM nParam = 0) {
 		strData.resize(nLen);
 		memcpy((char*)strData.c_str(), pData, nLen);
@@ -171,6 +171,10 @@ void Dump(BYTE* pData, size_t nSize);
 class CClientSocket
 {
 public:
+	bool ConnectWatch(HWND hWnd); // 连接远程监控的专用Socket
+	void DisconnectWatch();       // 断开远程监控的Socket
+	bool SendWatchPacket(const CPacket& pack); // 通过专用Socket发送数据
+
 	static CClientSocket* getInstance() {
 		if (m_instance == NULL) {
 			m_instance = new CClientSocket();
@@ -250,7 +254,7 @@ public:
 		}
 	}
 	
-	// ✅ 新增: 停止监控
+	//  新增: 停止监控
 	void StopMonitoring() {
 		m_bMonitoring = false;
 		m_bAutoClose = true;
@@ -263,8 +267,8 @@ private:
 	typedef void(CClientSocket::* MSGFUNC)(UINT nMsg, WPARAM wParam, LPARAM lParam);
 	std::map<UINT, MSGFUNC> m_mapFunc;
 	HANDLE m_hThread;
-	bool m_bAutoClose;        // ✅ 新增成员变量
-	bool m_bMonitoring;       // ✅ 新增成员变量
+	bool m_bAutoClose;        //  新增成员变量
+	bool m_bMonitoring;       //  新增成员变量
 	std::mutex m_lock;
 	std::list<CPacket> m_lstSend;
 	std::map<HANDLE, std::list<CPacket>&> m_mapAck;
@@ -274,10 +278,19 @@ private:
 	std::vector<char> m_buffer;
 	SOCKET m_sock;
 	CPacket m_packet;
+
+	SOCKET m_watchSock;          // 专用于远程监控的Socket
+	HANDLE m_hWatchThread;       // 远程监控的接收线程句柄
+	UINT   m_nWatchThreadID;     // 远程监控的接收线程ID
+	HWND   m_hWatchWND;          // 远程监控窗口的句柄，用于接收数据
+	bool   m_isWatchConnected;   // 标记监控连接是否处于活动状态
+
+	static unsigned __stdcall watchThreadEntry(void* arg); // 监控线程的入口函数
+	void watchThreadFunc();      // 监控线程的主体功能函数
 	
 	CClientSocket& operator=(const CClientSocket& ss) {}
 	CClientSocket(const CClientSocket& ss);
-	CClientSocket();  // ✅ 只声明,在 .cpp 中定义
+	CClientSocket();  //  只声明,在 .cpp 中定义
 	~CClientSocket() {
 		closesocket(m_sock);
 		m_sock = INVALID_SOCKET;

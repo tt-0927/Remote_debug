@@ -51,6 +51,12 @@ CClientSocket::CClientSocket() :
 	m_nIP(INADDR_ANY), m_nPort(0), m_sock(INVALID_SOCKET), m_bAutoClose(true),
 	m_hThread(INVALID_HANDLE_VALUE)
 {
+	m_watchSock = INVALID_SOCKET;
+	m_hWatchThread = INVALID_HANDLE_VALUE;
+	m_nWatchThreadID = 0;
+	m_hWatchWND = NULL;
+	m_isWatchConnected = false;
+
 	if (InitSockEnv() == FALSE) {
 		MessageBox(NULL, _T("无法初始化套接字环境,请检查网络设置！"), _T("初始化错误！"), MB_OK | MB_ICONERROR);
 		exit(0);
@@ -84,12 +90,12 @@ bool CClientSocket::InitSocket()
 	m_sock = socket(PF_INET, SOCK_STREAM, 0);
 	if (m_sock == -1) return false;
 	
-	// ✅ 添加端口复用选项
+	// 添加端口复用选项
 	int opt = 1;
 	setsockopt(m_sock, SOL_SOCKET, SO_REUSEADDR, 
               (const char*)&opt, sizeof(opt));
 	
-	// ✅ 禁用 Nagle 算法（可选，提高小数据包传输效率）
+	// 禁用 Nagle 算法
 	int nodelay = 1;
 	setsockopt(m_sock, IPPROTO_TCP, TCP_NODELAY, 
               (const char*)&nodelay, sizeof(nodelay));
@@ -252,7 +258,7 @@ void CClientSocket::threadFunc2()
         }
     }
     
-    // ✅ 添加退出日志
+    //  添加退出日志
     TRACE("threadFunc2 exit! GetLastError=%d\r\n", GetLastError());
 }
 
@@ -267,6 +273,8 @@ bool CClientSocket::Send(const CPacket& pack)
 
 void CClientSocket::SendPack(UINT nMsg, WPARAM wParam, LPARAM lParam)
 {
+	//wParam 结构包含原始二进制数据和连接模式
+	//lParam 是目标窗口句柄
     PACKET_DATA data = *(PACKET_DATA*)wParam;
     delete (PACKET_DATA*)wParam;
     HWND hWnd = (HWND)lParam;
@@ -277,11 +285,9 @@ void CClientSocket::SendPack(UINT nMsg, WPARAM wParam, LPARAM lParam)
     if (InitSocket() == true) {
         // 设置接收超时
         DWORD timeout = 5000;
-        setsockopt(m_sock, SOL_SOCKET, SO_RCVTIMEO, 
-                  (const char*)&timeout, sizeof(timeout));
+        setsockopt(m_sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
         
-        int ret = send(m_sock, (char*)data.strData.c_str(), 
-                      (int)data.strData.size(), 0);
+        int ret = send(m_sock, (char*)data.strData.c_str(), (int)data.strData.size(), 0);
         if (ret > 0) {
             size_t index = 0;
             std::string strBuffer;
@@ -300,25 +306,16 @@ void CClientSocket::SendPack(UINT nMsg, WPARAM wParam, LPARAM lParam)
                     ::SendMessage(hWnd, WM_SEND_PACK_ACK, NULL, -3);
                     return;
                 }
-                
-                int length = recv(m_sock, pBuffer + index, 
-                                BUFFER_SIZE - index, 0);
-                
+                int length = recv(m_sock, pBuffer + index, BUFFER_SIZE - index, 0);
                 if (length > 0 || (index > 0)) {
                     index += (size_t)length;
-                    
                     while (index > 0) {
                         size_t nLen = index;
                         CPacket pack((BYTE*)pBuffer, nLen);
-                        
                         if (nLen > 0) {
-                            TRACE("ack pack %d to hWnd %08X count=%d index=%d nLen=%d\r\n", 
-                                  pack.sCmd, hWnd, ++packetCount, index, nLen);
-                            
-                            ::SendMessage(hWnd, WM_SEND_PACK_ACK, 
-                                        (WPARAM)new CPacket(pack), data.wParam);
-                            
-                            // ✅ 根据命令类型判断是否结束
+                            TRACE("ack pack %d to hWnd %08X count=%d index=%d nLen=%d\r\n",pack.sCmd, hWnd, ++packetCount, index, nLen);
+                            ::SendMessage(hWnd, WM_SEND_PACK_ACK, (WPARAM)new CPacket(pack), data.wParam);
+                            // 根据命令类型判断是否结束
                             if (pack.sCmd == 2) {
                                 // 命令2: 文件列表
                                 if (pack.strData.size() >= sizeof(FILEINFO)) {
@@ -330,20 +327,19 @@ void CClientSocket::SendPack(UINT nMsg, WPARAM wParam, LPARAM lParam)
                                 }
                             }
                             else if (pack.sCmd == 5) {
-                                // ✅ 命令5: 鼠标操作 - **不标记为结束!**
+                                // 命令5: 鼠标操作，不标记为结束
                                 TRACE("Received mouse response for command 5, keep connection alive\r\n");
-                                receivedEndMarker = false;  // ← 保持连接!
+                                receivedEndMarker = false;  //保持连接
                             }
                             else if (pack.sCmd == 6) {
-                                // ✅ 命令6: 远程监控 - **不标记为结束!**
+                                // 命令6: 远程监控，不标记为结束
                                 TRACE("Received screen capture for command 6, keep connection alive\r\n");
-                                receivedEndMarker = false;  // ← 保持连接!
+                                receivedEndMarker = false;  //保持连接
                             }
                             else {
                                 // 其他命令(1,3,4,7,8,9,1981): 收到响应就结束
                                 receivedEndMarker = true;
-                                TRACE("Received response for command %d, mark as end\r\n", 
-                                      pack.sCmd);
+                                TRACE("Received response for command %d, mark as end\r\n", pack.sCmd);
                             }
                             
                             index -= nLen;
@@ -354,7 +350,7 @@ void CClientSocket::SendPack(UINT nMsg, WPARAM wParam, LPARAM lParam)
                         }
                     }
                     
-                    // ✅ 如果是 AUTOCLOSE 且收到结束标志,才关闭连接
+                    // 如果是 AUTOCLOSE 且收到结束标志,才关闭连接
                     if ((data.nMode & CSM_AUTOCLOSE) && receivedEndMarker) {
                         TRACE("All data received, closing socket\r\n");
                         CloseSocket();
@@ -362,8 +358,7 @@ void CClientSocket::SendPack(UINT nMsg, WPARAM wParam, LPARAM lParam)
                     }
                 }
                 else {
-                    TRACE("recv failed length %d index %d cmd %d packets=%d\r\n", 
-                          length, index, current.sCmd, packetCount);
+                    TRACE("recv failed length %d index %d cmd %d packets=%d\r\n", length, index, current.sCmd, packetCount);
                     CloseSocket();
                     ::SendMessage(hWnd, WM_SEND_PACK_ACK, 
                                 (WPARAM)new CPacket(current.sCmd, NULL, 0), 1);
@@ -381,15 +376,124 @@ void CClientSocket::SendPack(UINT nMsg, WPARAM wParam, LPARAM lParam)
     }
 
 	if (data.nMode & CSM_AUTOCLOSE) {
-		CloseSocket();  // ✅ 关闭连接（短连接模式）
+		CloseSocket();  // 关闭连接（短连接模式）
 		return;
 	}
 }
 
-// ❌ 删除这段代码 (因为在 .h 中已经内联定义)
-/*
-int CClientSocket::DealCommand()
+// 1. 连接远程监控的专用Socket
+bool CClientSocket::ConnectWatch(HWND hWnd)
 {
-    // ... 这段代码要删除 ...
+	if (m_isWatchConnected) return true; // 如果已经连接，则直接返回
+
+	m_hWatchWND = hWnd; // 保存监控窗口的句柄
+
+	m_watchSock = socket(PF_INET, SOCK_STREAM, 0);
+	if (m_watchSock == INVALID_SOCKET) return false;
+
+	sockaddr_in serv_adr;
+	memset(&serv_adr, 0, sizeof(serv_adr));
+	serv_adr.sin_family = AF_INET;
+	serv_adr.sin_addr.s_addr = htonl(m_nIP);
+	serv_adr.sin_port = htons(m_nPort);
+
+	if (connect(m_watchSock, (sockaddr*)&serv_adr, sizeof(serv_adr)) == SOCKET_ERROR) {
+		closesocket(m_watchSock);
+		m_watchSock = INVALID_SOCKET;
+		return false;
+	}
+
+	m_isWatchConnected = true;
+	// 启动专门的接收线程
+	m_hWatchThread = (HANDLE)_beginthreadex(NULL, 0, &CClientSocket::watchThreadEntry, this, 0, &m_nWatchThreadID);
+
+	TRACE("远程监控长连接已建立，接收线程已启动。\r\n");
+	return true;
 }
-*/
+
+// 2. 断开远程监控的Socket
+void CClientSocket::DisconnectWatch()
+{
+	m_isWatchConnected = false; // 设置标志位，让接收线程自然退出
+	if (m_watchSock != INVALID_SOCKET) {
+		shutdown(m_watchSock, SD_BOTH); // 温和地关闭连接
+		closesocket(m_watchSock);
+		m_watchSock = INVALID_SOCKET;
+	}
+
+	if (m_hWatchThread != INVALID_HANDLE_VALUE) {
+		// 等待线程结束，最多等待1秒
+		if (WaitForSingleObject(m_hWatchThread, 1000) == WAIT_TIMEOUT) {
+			TerminateThread(m_hWatchThread, -1); // 如果无法正常退出，则强制终止
+		}
+		CloseHandle(m_hWatchThread);
+		m_hWatchThread = INVALID_HANDLE_VALUE;
+	}
+	TRACE("远程监控长连接已断开。\r\n");
+}
+
+// 3. 通过专用Socket发送数据
+bool CClientSocket::SendWatchPacket(const CPacket& pack)
+{
+	if (!m_isWatchConnected || m_watchSock == INVALID_SOCKET) return false;
+
+	std::string strOut;
+	pack.Data(strOut);
+	if (send(m_watchSock, strOut.c_str(), strOut.size(), 0) == SOCKET_ERROR) {
+		// 发送失败，可能连接已断开
+		DisconnectWatch();
+		return false;
+	}
+	return true;
+}
+
+// 4. 监控线程的入口和主体函数
+unsigned __stdcall CClientSocket::watchThreadEntry(void* arg)
+{
+	CClientSocket* thiz = (CClientSocket*)arg;
+	thiz->watchThreadFunc();
+	_endthreadex(0);
+	return 0;
+}
+
+void CClientSocket::watchThreadFunc()
+{
+	std::string strBuffer;
+	strBuffer.resize(BUFFER_SIZE);
+	size_t index = 0;
+
+	while (m_isWatchConnected) // 只要连接标志位为true，就持续接收
+	{
+		int length = recv(m_watchSock, (char*)strBuffer.c_str() + index, BUFFER_SIZE - index, 0);
+
+		if (length <= 0) {
+			// 接收失败或连接被对方关闭
+			TRACE("远程监控连接 recv 失败或对方关闭，错误码: %d\r\n", WSAGetLastError());
+			if (m_isWatchConnected) {
+				// 如果不是主动断开，就通知UI
+				::SendMessage(m_hWatchWND, WM_SEND_PACK_ACK, (WPARAM)new CPacket(0, NULL, 0), -1); // 发送一个错误消息
+			}
+			break; // 退出循环
+		}
+
+		index += length;
+
+		while (index > 0)
+		{
+			size_t nLen = index;
+			CPacket* pack = new CPacket((BYTE*)strBuffer.c_str(), nLen);
+
+			if (nLen > 0) { // 成功解析出一个完整的数据包
+				// 将数据包指针通过消息发送给UI线程
+				::SendMessage(m_hWatchWND, WM_SEND_PACK_ACK, (WPARAM)pack, 0);
+				index -= nLen;
+				memmove((void*)strBuffer.c_str(), strBuffer.c_str() + nLen, index);
+			}
+			else {
+				delete pack; // 数据不足以构成一个包，释放内存
+				break;       // 跳出内层循环，等待接收更多数据
+			}
+		}
+	}
+	DisconnectWatch(); // 确保线程退出时连接被清理
+}

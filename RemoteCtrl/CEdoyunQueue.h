@@ -231,10 +231,10 @@ public:
 		if (WaitForSingleObject(CEdoyunQueue<T>::m_hThread, 0) != WAIT_TIMEOUT)
 			return 0;
 		
-		// ✅ 只在队列非空时触发发送
+		// 只在队列非空时触发发送
 		if (CEdoyunQueue<T>::m_lstData.size() > 0) {
 			PopFront();
-			Sleep(5); // ✅ 给 IOCP 一点时间处理
+			Sleep(5); // 给 IOCP 一点时间处理
 		}
 		else {
 			Sleep(10); // 空闲时休眠久一点
@@ -255,12 +255,12 @@ public:
 			if (CEdoyunQueue<T>::m_lstData.size() > 0) {
 				pParam->Data = CEdoyunQueue<T>::m_lstData.front();
 				
-				// ✅ 调用回调函数发送数据
+				// 调用回调函数发送数据
 				int ret = (m_base->*m_callback)(pParam->Data);
 				
 				TRACE("[SendQueue] SendData返回值=%d\r\n", ret);
 				
-				// ✅ 只有当返回 -1 时才从队列移除（表示已成功投递发送）
+				// 只有当返回 -1 时才从队列移除（表示已成功投递发送）
 				// 返回 0 表示暂时无法发送（如上一个包还在发送中）
 				if (ret == -1) {
 					CEdoyunQueue<T>::m_lstData.pop_front();

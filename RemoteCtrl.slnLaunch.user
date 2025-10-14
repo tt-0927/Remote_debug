@@ -4,7 +4,8 @@
     "Projects": [
       {
         "Path": "RemoteCtrl\\RemoteCtrl.vcxproj",
-        "Action": "Start"
+        "Action": "Start",
+        "DebugTarget": "本地 Windows 调试器"
       },
       {
         "Path": "RemoteClient\\RemoteClient.vcxproj",

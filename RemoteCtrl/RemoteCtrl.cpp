@@ -56,7 +56,7 @@ void iocp()
 	EdoyunServer server;
 	server.StartService();
 
-	// ✅ 保持服务运行，直到用户明确退出
+	// 保持服务运行，直到用户明确退出
 	printf("服务已启动，按 'q' 退出...\n");
 	while (true) {
 		char ch = getchar();

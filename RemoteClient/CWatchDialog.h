@@ -3,7 +3,7 @@
 #define WM_SEND_PACK_ACK (WM_USER+2)
 #endif
 
-#define WATCH_TIMER_ID 1001  // ✅ 定时器ID
+//#define WATCH_TIMER_ID 1001  // ✅ 定时器ID
 
 class CWatchDialog : public CDialog
 {
@@ -18,23 +18,19 @@ public:
 #endif
 
 public:
-	// ✅ 公共成员变量
+	// 公共成员变量
 	int m_nObjWidth;
 	int m_nObjHeight;
 	CImage m_image;
 	CStatic m_picture;
-	bool isFull;         // ✅ 移到 public,供外部访问
+	bool m_isFull;         // 移到 public,供外部访问
 	
 protected:
-	// ✅ 保护成员变量
-	bool m_isFull;
-	UINT_PTR m_nTimerID;
-	
 	virtual void DoDataExchange(CDataExchange* pDX);
 	DECLARE_MESSAGE_MAP()
 	
 public:
-	// ✅ 公共成员函数
+	// 公共成员函数
 	CImage& GetImage() {
 		return m_image;
 	}
@@ -43,7 +39,7 @@ public:
 		m_isFull = isFull;
 	}
 	
-	bool IsFull() const {  // ✅ getter 函数
+	bool IsFull() const {  // getter 函数
 		return m_isFull;
 	}
 	
@@ -52,8 +48,7 @@ public:
 	virtual BOOL OnInitDialog();
 	virtual void OnOK();
 	
-	// ✅ 消息处理函数
-	afx_msg void OnTimer(UINT_PTR nIDEvent);
+	// 消息处理函数
 	afx_msg LRESULT OnSendPackAck(WPARAM wParam, LPARAM lParam);
 	afx_msg void OnLButtonDblClk(UINT nFlags, CPoint point);
 	afx_msg void OnLButtonDown(UINT nFlags, CPoint point);
@@ -66,4 +61,6 @@ public:
 	afx_msg void OnBnClickedBtnLock();
 	afx_msg void OnBnClickedBtnUnlock();
 	afx_msg void OnBnClickedBtnWatch();
+	afx_msg void OnPaint();
+	afx_msg void OnClose(); // <-- 添加OnClose声明，如果已有则忽略
 };

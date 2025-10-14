@@ -122,25 +122,25 @@ public:
     
     RecvOverlapped();
     
-    // ✅ Recv Worker 处理函数
+    // Recv Worker 处理函数
     int RecvWorker() {
         TRACE("[RecvWorker] 开始处理接收数据，socket=%d，this=%p，线程ID=%d\r\n",
               m_client->m_sock, this, GetCurrentThreadId());
         
-        // ✅ 使用保存的传输字节数
-        DWORD nBytes = m_transferred;  // ← 使用 threadIocp 传递的值!
+        // 使用保存的传输字节数
+        DWORD nBytes = m_transferred;  // 使用 threadIocp 传递的值
         
-        // ✅ 打印接收到的数据
+        // 打印接收到的数据
         if (nBytes > 0) {
             TRACE("[RecvWorker] 接收到 %d 字节数据\r\n", nBytes);
             CEdoyunTool::Dump((BYTE*)m_buffer.data(), nBytes);
         }
         else {
             TRACE("[RecvWorker] 接收到 0 字节，连接可能已关闭\r\n");
-            return -1;  // ✅ 不继续处理
+            return -1;  // 不继续处理
         }
         
-        // ✅ 解析数据包
+        // 解析数据包
         std::list<CPacket> lstPackets;
         size_t nUsed = 0;
         
@@ -153,19 +153,17 @@ public:
                 break;
             }
             
-            TRACE("[RecvWorker] 解析数据包，命令=%d，解析长度=%d\r\n", 
-                  packet.sCmd, nParsed);
-            
+            TRACE("[RecvWorker] 解析数据包，命令=%d，解析长度=%d\r\n",  packet.sCmd, nParsed);            
             nUsed += nParsed;
             
-            // ✅ 执行命令
+            // 执行命令
             TRACE("[RecvWorker] 执行命令 %d\r\n", packet.sCmd);
             m_client->cmd.ExcuteCommand(packet.sCmd, lstPackets, packet);
         }
         
         TRACE("[RecvWorker] 命令执行完成，响应包数量=%d\r\n", lstPackets.size());
         
-        // ✅ 发送响应包
+        // 发送响应包
         while (lstPackets.size() > 0) {
             CPacket& response = lstPackets.front();
             m_client->Send((void*)response.Data(), response.Size());
@@ -174,17 +172,14 @@ public:
         
         TRACE("[RecvWorker] 已加入 %d 个响应包到发送队列\r\n", lstPackets.size());
         
-        // ✅ 关键修复: 重新投递接收操作 (复用同一个缓冲区)
-        // ✅ 重置 WSABUF 指向原始缓冲区
+        // 重新投递接收操作 (复用同一个缓冲区)
+        // 重置 WSABUF 指向原始缓冲区
         m_wsabuffer.buf = m_buffer.data();
-        m_wsabuffer.len = m_buffer.size();  // ✅ 恢复到完整容量!
+        m_wsabuffer.len = m_buffer.size();  // 恢复到完整容量
         
         DWORD dwFlags = 0;
         DWORD dwReceived = 0;
-        int ret = WSARecv(m_client->m_sock, 
-                         &m_wsabuffer, 1, 
-                         &dwReceived, &dwFlags, 
-                         &m_overlapped, NULL);
+        int ret = WSARecv(m_client->m_sock, &m_wsabuffer, 1, &dwReceived, &dwFlags, &m_overlapped, NULL);
         
         if (ret == SOCKET_ERROR && (WSAGetLastError() != WSA_IO_PENDING)) {
             int error = WSAGetLastError();
@@ -193,7 +188,7 @@ public:
         }
         
         TRACE("[RecvWorker] 已重新投递接收操作，缓冲区大小=%d\r\n", m_wsabuffer.len);
-        return -1;  // ✅ 返回-1，告诉线程池清理 worker
+        return -1;  // 返回-1，告诉线程池清理 worker
     }
 };
 
@@ -205,10 +200,9 @@ public:
     
     SendOverlapped();
     
-    // ✅ Send Worker 处理函数
+    //  Send Worker 处理函数
     int SendWorker() {
-        TRACE("[SendWorker] 发送完成通知，socket=%d，this=%p，线程ID=%d\r\n",
-              m_client->m_sock, this, GetCurrentThreadId());
+        TRACE("[SendWorker] 发送完成通知，socket=%d，this=%p，线程ID=%d\r\n",m_client->m_sock, this, GetCurrentThreadId());
         
         DWORD nBytes = m_transferred;
         TRACE("[SendWorker] 已发送 %d 字节\r\n", nBytes);
@@ -217,11 +211,10 @@ public:
             CEdoyunTool::Dump((BYTE*)m_buffer.data(), nBytes);
         }
         
-        // ✅ 关键修复: 清空客户端的发送缓冲区
+        // 清空客户端的发送缓冲区
         m_client->sendbuf.clear();
         
-        TRACE("[SendWorker] 发送缓冲区已清空，队列剩余=%d\r\n", 
-              m_client->m_vecSend.Size());
+        TRACE("[SendWorker] 发送缓冲区已清空，队列剩余=%d\r\n", m_client->m_vecSend.Size());
         
         return -1;  // 返回-1，清理 worker
     }

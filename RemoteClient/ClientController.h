@@ -13,10 +13,6 @@
 #define WM_SHOW_WATCH (WM_USER+4) //远程监控
 #define WM_SEND_MESSAGE (WM_USER+0x1000) //自定义消息处理
 
-//业务逻辑和流程，是随时可能发生改变的！！！！！
-//业务逻辑和流程，是随时可能发生改变的！！！！！
-//业务逻辑和流程，是随时可能发生改变的！！！！！
-
 class CClientController
 {
 public:
@@ -64,6 +60,11 @@ public:
 	int DownFile(CString strPath);
 
 	void StartWatchScreen();
+
+	bool StartWatch(HWND hWnd);    // 开始远程监控（建立长连接）
+	void StopWatch();            // 停止远程监控（断开长连接）
+	bool SendCommandWatch(int nCmd, BYTE* pData = NULL, size_t nLength = 0); // 通过长连接发送命令
+
 protected:
 	void threadWatchScreen();
 	static void threadWatchScreen(void* arg);
